@@ -1,0 +1,84 @@
+fullnameOverride: kps
+
+# POC 环境：关掉对 EKS 托管控制面组件的抓取，这些 endpoint 在 EKS 上不可达，
+# 否则 Prometheus 里会一直有 target down 噪音
+kubeApiServer:
+  enabled: true
+kubeControllerManager:
+  enabled: false
+kubeScheduler:
+  enabled: false
+kubeEtcd:
+  enabled: false
+kubeProxy:
+  enabled: false
+
+prometheus:
+  prometheusSpec:
+    retention: 15d
+    scrapeInterval: 60s
+    evaluationInterval: 60s
+    # 允许发现本 release 之外的 ServiceMonitor（YACE 是独立 release）
+    serviceMonitorSelectorNilUsesHelmValues: false
+    podMonitorSelectorNilUsesHelmValues: false
+    ruleSelectorNilUsesHelmValues: false
+    resources:
+      requests:
+        cpu: 200m
+        memory: 1Gi
+      limits:
+        memory: 3Gi
+    storageSpec:
+      volumeClaimTemplate:
+        spec:
+          storageClassName: gp3
+          accessModes: ["ReadWriteOnce"]
+          resources:
+            requests:
+              storage: 30Gi
+
+alertmanager:
+  enabled: true
+  alertmanagerSpec:
+    storage:
+      volumeClaimTemplate:
+        spec:
+          storageClassName: gp3
+          accessModes: ["ReadWriteOnce"]
+          resources:
+            requests:
+              storage: 5Gi
+
+grafana:
+  enabled: true
+  # 不暴露公网。访问方式：
+  #   kubectl -n monitoring port-forward svc/kps-grafana 3000:80
+  # 若客户需要团队共享访问，再改成 internal NLB + 私网/VPN，或前置 ALB + OIDC 认证
+  service:
+    type: ClusterIP
+  defaultDashboardsEnabled: true
+  persistence:
+    enabled: true
+    storageClassName: gp3
+    size: 10Gi
+  # 自动加载带 grafana_dashboard=1 标签的 ConfigMap 作为看板
+  sidecar:
+    dashboards:
+      enabled: true
+      label: grafana_dashboard
+      labelValue: "1"
+      searchNamespace: monitoring
+  grafana.ini:
+    users:
+      default_theme: light
+
+prometheusOperator:
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+
+nodeExporter:
+  enabled: true
+kubeStateMetrics:
+  enabled: true

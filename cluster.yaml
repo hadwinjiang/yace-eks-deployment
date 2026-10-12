@@ -1,0 +1,49 @@
+apiVersion: eksctl.io/v1alpha5
+kind: ClusterConfig
+
+metadata:
+  name: g2610-yace
+  region: us-west-2
+  version: "1.34"
+  tags:
+    Project: g2610-YACE
+    Purpose: CloudWatch-to-Grafana POC
+    auto_delete: "no"
+    ManagedBy: eksctl
+
+iam:
+  withOIDC: true
+
+managedNodeGroups:
+  - name: ng-monitoring
+    instanceType: t3.large
+    desiredCapacity: 2
+    minSize: 2
+    maxSize: 3
+    volumeSize: 50
+    volumeType: gp3
+    privateNetworking: true
+    labels:
+      role: monitoring
+    tags:
+      Project: g2610-YACE
+      auto_delete: "no"
+
+addons:
+  - name: eks-pod-identity-agent
+    version: latest
+  - name: vpc-cni
+    version: latest
+  - name: coredns
+    version: latest
+  - name: kube-proxy
+    version: latest
+  - name: aws-ebs-csi-driver
+    version: latest
+    # Prometheus/Grafana 需要 PVC，EBS CSI driver 必装
+    useDefaultPodIdentityAssociations: true
+
+cloudWatch:
+  clusterLogging:
+    enableTypes: ["audit", "authenticator"]
+    logRetentionInDays: 7

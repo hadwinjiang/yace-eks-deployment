@@ -1,0 +1,15 @@
+# eksctl 默认只给一个 in-tree 的 gp2 SC。gp3 更便宜、基线性能更好，
+# Prometheus/Grafana/Alertmanager 的 PVC 都用这个。
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: gp3
+  annotations:
+    storageclass.kubernetes.io/is-default-class: "true"
+provisioner: ebs.csi.aws.com
+volumeBindingMode: WaitForFirstConsumer
+reclaimPolicy: Delete
+allowVolumeExpansion: true
+parameters:
+  type: gp3
+  encrypted: "true"

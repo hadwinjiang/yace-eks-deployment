@@ -1,0 +1,143 @@
+replicaCount: 1   # 不要多副本：YACE 有内部缓存，多副本会让 CloudWatch API 调用和费用翻倍
+
+image:
+  tag: v0.68.0    # 锁定版本，YACE < 1.0.0 小版本可能有 breaking change
+
+# AK/SK 方案：引用预先创建的 Secret
+# Secret 必须包含 access_key / secret_key 两个 key（chart 约定的字段名）
+aws:
+  secret:
+    name: yace-aws-credentials
+    includesSessionToken: false
+
+extraArgs:
+  scraping-interval: 120   # 后台拉 CloudWatch 的间隔（秒）；生产建议 300 以控成本
+  log.level: info
+  log.format: logfmt
+
+# 让 Prometheus Operator 自动发现并抓取
+serviceMonitor:
+  enabled: true
+  namespace: monitoring
+  interval: 60s
+  timeout: 30s
+  labels:
+    release: kube-prometheus-stack   # 必须匹配 Prometheus 的 serviceMonitorSelector
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 256Mi
+  limits:
+    memory: 1Gi
+
+nodeSelector:
+  role: monitoring
+
+config: |-
+  apiVersion: v1alpha1
+  sts-region: us-west-2
+
+  discovery:
+    # v0.68 起 key 必须是完整 namespace，用别名（ec2/es）会启动失败
+    exportedTagsOnMetrics:
+      AWS/EC2:
+        - Name
+      AWS/ES:
+        - Name
+      AWS/SQS:
+        - Name
+
+    jobs:
+      # ---------- EC2 ----------
+      - type: AWS/EC2
+        regions: [us-west-2]
+        period: 300
+        length: 600
+        statistics: [Average, Maximum]
+        nilToZero: true
+        # 跨账号：在这里列出各目标账号的角色，YACE 会用 AK/SK 身份去 AssumeRole
+        # roles:
+        #   - roleArn: "arn:aws:iam::111111111111:role/yace-cloudwatch-readonly"
+        #   - roleArn: "arn:aws:iam::222222222222:role/yace-cloudwatch-readonly"
+        metrics:
+          - name: CPUUtilization
+          - name: NetworkIn
+          - name: NetworkOut
+          - name: StatusCheckFailed
+
+      # ---------- EBS ----------
+      - type: AWS/EBS
+        regions: [us-west-2]
+        period: 300
+        length: 600
+        statistics: [Average, Sum]
+        nilToZero: true
+        metrics:
+          - name: VolumeReadOps
+          - name: VolumeWriteOps
+          - name: VolumeQueueLength
+
+      # ---------- OpenSearch / Elasticsearch ----------
+      - type: AWS/ES
+        regions: [us-west-2]
+        period: 300
+        length: 600
+        statistics: [Average, Maximum]
+        nilToZero: true
+        metrics:
+          - name: ClusterStatus.green
+          - name: ClusterStatus.yellow
+          - name: ClusterStatus.red
+          - name: CPUUtilization
+          - name: JVMMemoryPressure
+          - name: FreeStorageSpace
+          - name: SearchableDocuments
+
+      # ---------- SQS ----------
+      - type: AWS/SQS
+        regions: [us-west-2]
+        period: 300
+        length: 600
+        statistics: [Average, Sum]
+        nilToZero: true
+        metrics:
+          - name: ApproximateNumberOfMessagesVisible
+          - name: ApproximateAgeOfOldestMessage
+          - name: NumberOfMessagesSent
+          - name: NumberOfMessagesReceived
+
+      # ---------- EFS ----------
+      - type: AWS/EFS
+        regions: [us-west-2]
+        period: 300
+        length: 600
+        statistics: [Average, Sum]
+        nilToZero: true
+        metrics:
+          - name: ClientConnections
+          - name: DataReadIOBytes
+          - name: DataWriteIOBytes
+
+      # ---------- S3（日粒度指标，period/length 必须拉长，否则取不到数） ----------
+      - type: AWS/S3
+        regions: [us-west-2]
+        period: 86400
+        length: 172800
+        statistics: [Average]
+        metrics:
+          - name: BucketSizeBytes
+          - name: NumberOfObjects
+
+      # ---------- Lambda ----------
+      - type: AWS/Lambda
+        regions: [us-west-2]
+        period: 300
+        length: 600
+        statistics: [Sum, Average]
+        nilToZero: true
+        metrics:
+          - name: Invocations
+          - name: Errors
+          - name: Duration
+          - name: Throttles

@@ -1,0 +1,464 @@
+{
+  "title": "CloudWatch via YACE — us-west-2",
+  "uid": "yace-uswest2",
+  "tags": ["yace", "cloudwatch", "aws"],
+  "timezone": "browser",
+  "editable": true,
+  "schemaVersion": 39,
+  "refresh": "1m",
+  "time": { "from": "now-6h", "to": "now" },
+  "templating": {
+    "list": [
+      {
+        "name": "datasource",
+        "label": "数据源",
+        "type": "datasource",
+        "query": "prometheus",
+        "current": { "text": "Prometheus", "value": "prometheus" },
+        "hide": 0
+      }
+    ]
+  },
+  "panels": [
+    {
+      "type": "row",
+      "title": "CloudWatch API 用量与成本",
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 0 },
+      "collapsed": false
+    },
+    {
+      "type": "stat",
+      "title": "GetMetricData 请求数（累计）",
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "gridPos": { "h": 5, "w": 5, "x": 0, "y": 1 },
+      "targets": [
+        { "refId": "A", "expr": "yace_cloudwatch_getmetricdata_requests_total" }
+      ],
+      "fieldConfig": {
+        "defaults": { "unit": "short", "color": { "mode": "fixed", "fixedColor": "text" } },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "colorMode": "none",
+        "graphMode": "area",
+        "textMode": "auto"
+      }
+    },
+    {
+      "type": "stat",
+      "title": "请求的指标数（累计）",
+      "description": "CloudWatch GetMetricData 按「请求的指标数」计费，不是按请求数。这个值才是成本基数。",
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "gridPos": { "h": 5, "w": 5, "x": 5, "y": 1 },
+      "targets": [
+        { "refId": "A", "expr": "yace_cloudwatch_getmetricdata_metrics_requested_total" }
+      ],
+      "fieldConfig": {
+        "defaults": { "unit": "short", "color": { "mode": "fixed", "fixedColor": "text" } },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "colorMode": "none",
+        "graphMode": "area",
+        "textMode": "auto"
+      }
+    },
+    {
+      "type": "stat",
+      "title": "预估月度 CloudWatch API 费用",
+      "description": "按 $0.01 / 1000 metrics requested，用最近 1 小时速率外推 30 天。未扣除免费额度。",
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "gridPos": { "h": 5, "w": 6, "x": 10, "y": 1 },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "increase(yace_cloudwatch_getmetricdata_metrics_requested_total[1h]) * 24 * 30 / 1000 * 0.01"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "currencyUSD",
+          "decimals": 2,
+          "color": { "mode": "thresholds" },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "orange", "value": 50 },
+              { "color": "red", "value": 200 }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "auto"
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "CloudWatch API 调用速率（按 API 分）",
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "gridPos": { "h": 5, "w": 8, "x": 16, "y": 1 },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "rate(yace_cloudwatch_requests_total[5m]) * 60",
+          "legendFormat": "{{api_name}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqpm",
+          "custom": { "fillOpacity": 10, "lineWidth": 2, "showPoints": "never" }
+        },
+        "overrides": []
+      },
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" } }
+    },
+
+    {
+      "type": "row",
+      "title": "EC2",
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 6 },
+      "collapsed": false
+    },
+    {
+      "type": "timeseries",
+      "title": "EC2 CPU 利用率",
+      "description": "通过 aws_ec2_info join 出 Name tag —— 看板上不再出现裸 instance id。",
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 7 },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "aws_ec2_cpuutilization_average",
+          "legendFormat": "{{tag_Name}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "min": 0,
+          "max": 100,
+          "custom": { "fillOpacity": 15, "lineWidth": 2, "showPoints": "never" }
+        },
+        "overrides": []
+      },
+      "options": { "legend": { "displayMode": "table", "placement": "bottom", "calcs": ["mean", "max"] } }
+    },
+    {
+      "type": "timeseries",
+      "title": "EC2 网络吞吐",
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 7 },
+      "targets": [
+        { "refId": "A", "expr": "aws_ec2_network_in_average", "legendFormat": "{{tag_Name}} · in" },
+        { "refId": "B", "expr": "aws_ec2_network_out_average", "legendFormat": "{{tag_Name}} · out" }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "bytes",
+          "custom": { "fillOpacity": 10, "lineWidth": 2, "showPoints": "never" }
+        },
+        "overrides": []
+      },
+      "options": { "legend": { "displayMode": "table", "placement": "bottom", "calcs": ["mean"] } }
+    },
+
+    {
+      "type": "row",
+      "title": "OpenSearch / Elasticsearch",
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 15 },
+      "collapsed": false
+    },
+    {
+      "type": "stat",
+      "title": "集群状态",
+      "description": "green=1 表示健康。YACE 把 CloudWatch 的 ClusterStatus.green/yellow/red 三个独立指标分别导出。",
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "gridPos": { "h": 7, "w": 6, "x": 0, "y": 16 },
+      "targets": [
+        { "refId": "A", "expr": "aws_es_cluster_status_green_maximum", "legendFormat": "green" },
+        { "refId": "B", "expr": "aws_es_cluster_status_yellow_maximum", "legendFormat": "yellow" },
+        { "refId": "C", "expr": "aws_es_cluster_status_red_maximum", "legendFormat": "red" }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "mappings": [
+            { "type": "value", "options": { "0": { "text": "—", "color": "text" } } },
+            { "type": "value", "options": { "1": { "text": "ACTIVE", "color": "orange" } } }
+          ]
+        },
+        "overrides": [
+          {
+            "matcher": { "id": "byName", "options": "green" },
+            "properties": [
+              { "id": "mappings", "value": [
+                { "type": "value", "options": { "0": { "text": "—", "color": "text" } } },
+                { "type": "value", "options": { "1": { "text": "HEALTHY", "color": "green" } } }
+              ] }
+            ]
+          },
+          {
+            "matcher": { "id": "byName", "options": "red" },
+            "properties": [
+              { "id": "mappings", "value": [
+                { "type": "value", "options": { "0": { "text": "—", "color": "text" } } },
+                { "type": "value", "options": { "1": { "text": "RED", "color": "red" } } }
+              ] }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "value_and_name",
+        "orientation": "vertical"
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "OpenSearch 节点 CPU",
+      "description": "dimension_NodeId 非空 = 单节点；空字符串 = 集群聚合值。",
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "gridPos": { "h": 7, "w": 9, "x": 6, "y": 16 },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "aws_es_cpuutilization_average{dimension_NodeId!=\"\"}",
+          "legendFormat": "{{dimension_DomainName}} · {{dimension_NodeId}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "min": 0,
+          "custom": { "fillOpacity": 10, "lineWidth": 2, "showPoints": "never" }
+        },
+        "overrides": []
+      },
+      "options": { "legend": { "displayMode": "table", "placement": "bottom", "calcs": ["mean", "max"] } }
+    },
+    {
+      "type": "timeseries",
+      "title": "JVM 内存压力",
+      "description": "持续 >75% 需要关注；>90% 可能触发 OOM / 节点不可用。",
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "gridPos": { "h": 7, "w": 9, "x": 15, "y": 16 },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "aws_es_jvmmemory_pressure_average{dimension_NodeId!=\"\"}",
+          "legendFormat": "{{dimension_NodeId}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "min": 0,
+          "max": 100,
+          "custom": { "fillOpacity": 10, "lineWidth": 2, "showPoints": "never", "thresholdsStyle": { "mode": "dashed" } },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "orange", "value": 75 },
+              { "color": "red", "value": 90 }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": { "legend": { "displayMode": "table", "placement": "bottom", "calcs": ["mean", "max"] } }
+    },
+    {
+      "type": "timeseries",
+      "title": "OpenSearch 可用存储",
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "gridPos": { "h": 7, "w": 12, "x": 0, "y": 23 },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "aws_es_free_storage_space_average{dimension_NodeId!=\"\"} * 1024 * 1024",
+          "legendFormat": "{{dimension_NodeId}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "bytes",
+          "min": 0,
+          "custom": { "fillOpacity": 10, "lineWidth": 2, "showPoints": "never" }
+        },
+        "overrides": []
+      },
+      "options": { "legend": { "displayMode": "table", "placement": "bottom", "calcs": ["lastNotNull"] } }
+    },
+    {
+      "type": "timeseries",
+      "title": "可检索文档数",
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "gridPos": { "h": 7, "w": 12, "x": 12, "y": 23 },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "aws_es_searchable_documents_average",
+          "legendFormat": "{{dimension_DomainName}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": { "fillOpacity": 10, "lineWidth": 2, "showPoints": "never" }
+        },
+        "overrides": []
+      },
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" } }
+    },
+
+    {
+      "type": "row",
+      "title": "SQS / EBS / S3",
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 30 },
+      "collapsed": false
+    },
+    {
+      "type": "timeseries",
+      "title": "SQS 队列积压",
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "gridPos": { "h": 7, "w": 8, "x": 0, "y": 31 },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "aws_sqs_approximate_number_of_messages_visible_sum",
+          "legendFormat": "{{dimension_QueueName}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "min": 0,
+          "custom": { "fillOpacity": 15, "lineWidth": 2, "showPoints": "never" }
+        },
+        "overrides": []
+      },
+      "options": { "legend": { "displayMode": "table", "placement": "bottom", "calcs": ["lastNotNull", "max"] } }
+    },
+    {
+      "type": "timeseries",
+      "title": "SQS 收发速率",
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "gridPos": { "h": 7, "w": 8, "x": 8, "y": 31 },
+      "targets": [
+        { "refId": "A", "expr": "aws_sqs_number_of_messages_sent_sum", "legendFormat": "{{dimension_QueueName}} · sent" },
+        { "refId": "B", "expr": "aws_sqs_number_of_messages_received_sum", "legendFormat": "{{dimension_QueueName}} · recv" }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "min": 0,
+          "custom": { "fillOpacity": 10, "lineWidth": 2, "showPoints": "never" }
+        },
+        "overrides": []
+      },
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" } }
+    },
+    {
+      "type": "timeseries",
+      "title": "EBS 读写 IOPS",
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "gridPos": { "h": 7, "w": 8, "x": 16, "y": 31 },
+      "targets": [
+        { "refId": "A", "expr": "aws_ebs_volume_read_ops_sum / 300", "legendFormat": "{{dimension_VolumeId}} · read" },
+        { "refId": "B", "expr": "aws_ebs_volume_write_ops_sum / 300", "legendFormat": "{{dimension_VolumeId}} · write" }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "iops",
+          "min": 0,
+          "custom": { "fillOpacity": 10, "lineWidth": 2, "showPoints": "never" }
+        },
+        "overrides": []
+      },
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" } }
+    },
+    {
+      "type": "table",
+      "title": "S3 桶容量与对象数",
+      "description": "S3 存储指标是日粒度，period/length 必须设成 86400/172800，否则取不到数。",
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "gridPos": { "h": 9, "w": 24, "x": 0, "y": 38 },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "aws_s3_bucket_size_bytes_average",
+          "format": "table",
+          "instant": true
+        },
+        {
+          "refId": "B",
+          "expr": "aws_s3_number_of_objects_average",
+          "format": "table",
+          "instant": true
+        }
+      ],
+      "transformations": [
+        {
+          "id": "joinByField",
+          "options": { "byField": "dimension_BucketName", "mode": "outer" }
+        },
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Time": true, "Time 1": true, "Time 2": true,
+              "__name__": true, "__name__ 1": true, "__name__ 2": true,
+              "job": true, "job 1": true, "job 2": true,
+              "instance": true, "instance 1": true, "instance 2": true,
+              "account_id": true, "account_id 1": true, "account_id 2": true,
+              "region": true, "region 1": true, "region 2": true,
+              "name": true, "name 1": true, "name 2": true,
+              "tag_Name": true, "tag_Name 1": true, "tag_Name 2": true,
+              "dimension_StorageType 2": true
+            },
+            "renameByName": {
+              "dimension_BucketName": "Bucket",
+              "dimension_StorageType": "存储类型",
+              "dimension_StorageType 1": "存储类型",
+              "Value #A": "容量",
+              "Value #B": "对象数"
+            }
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": { "custom": { "align": "auto", "filterable": true } },
+        "overrides": [
+          {
+            "matcher": { "id": "byName", "options": "容量" },
+            "properties": [
+              { "id": "unit", "value": "bytes" },
+              { "id": "custom.cellOptions", "value": { "type": "gauge", "mode": "gradient" } }
+            ]
+          },
+          {
+            "matcher": { "id": "byName", "options": "对象数" },
+            "properties": [{ "id": "unit", "value": "short" }]
+          }
+        ]
+      },
+      "options": {
+        "sortBy": [{ "displayName": "容量", "desc": true }],
+        "showHeader": true
+      }
+    }
+  ]
+}
